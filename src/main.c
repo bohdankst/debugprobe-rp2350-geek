@@ -30,6 +30,7 @@
 #include <pico/stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 #if PICO_SDK_VERSION_MAJOR >= 2
 #include "bsp/board_api.h"
@@ -48,6 +49,7 @@
 
 #if (LCD_DISPLAY > 0)
 #include "gui.h"
+#include "pico/multicore.h"
 #endif
 
 // UART0 for debugprobe debug
@@ -65,6 +67,10 @@ static uint8_t RxDataBuffer[CFG_TUD_HID_EP_BUFSIZE];
 TaskHandle_t dap_taskhandle, tud_taskhandle, mon_taskhandle;
 
 static int was_configured;
+
+bool usbConnectedVal = false;
+bool dapConnectedVal = false;
+bool dapRunningVal = false;
 
 void dev_mon(void *ptr)
 {
@@ -105,6 +111,7 @@ void usb_thread(void *ptr)
     wake = xTaskGetTickCount();
     do {
         tud_task();
+        usbConnectedVal = tud_ready();
 #ifdef PROBE_USB_CONNECTED_LED
         if (!gpio_get(PROBE_USB_CONNECTED_LED) && tud_ready())
             gpio_put(PROBE_USB_CONNECTED_LED, 1);
@@ -125,6 +132,15 @@ void usb_thread(void *ptr)
 #define tud_vendor_flush(x) ((void)0)
 #endif
 
+#if (LCD_DISPLAY > 0)
+void core1_entry() {
+    while (1) {
+        gui_run();
+        sleep_ms(10);
+    }
+}
+#endif
+
 int main(void) {
     // Declare pins in binary information
     bi_decl_config();
@@ -135,9 +151,10 @@ int main(void) {
     tusb_init();
     stdio_uart_init();
 
-  #if (LCD_DISPLAY > 0)
+#if (LCD_DISPLAY > 0)
     gui_init(2500); // 2.5 seconds for the start screen
-  #endif
+    multicore_launch_core1(core1_entry);
+#endif
 
     DAP_Setup();
 

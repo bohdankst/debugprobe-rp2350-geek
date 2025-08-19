@@ -23,6 +23,7 @@
  *
  */
 
+#include <stdbool.h>
 #include <pico/stdlib.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -35,20 +36,18 @@ TickType_t last_wake, interval = 100;
 volatile TickType_t break_expiry;
 volatile bool timed_break;
 
+bool txLedValue = false;
+bool rxLedValue = false;
+
 /* Max 1 FIFO worth of data */
 static uint8_t tx_buf[32];
 static uint8_t rx_buf[32];
 // Actually s^-1 so 25ms
-#define DEBOUNCE_MS 40
+#define DEBOUNCE_MS 20
 static uint debounce_ticks = 5;
 
-#ifdef PROBE_UART_TX_LED
 static volatile uint tx_led_debounce;
-#endif
-
-#ifdef PROBE_UART_RX_LED
 static uint rx_led_debounce;
-#endif
 
 void cdc_uart_init(void) {
     gpio_set_function(PROBE_UART_TX, GPIO_FUNC_UART);
@@ -57,13 +56,13 @@ void cdc_uart_init(void) {
     gpio_set_pulls(PROBE_UART_RX, 1, 0);
     uart_init(PROBE_UART_INTERFACE, PROBE_UART_BAUDRATE);
 
-#ifdef PROBE_UART_TX_LED
     tx_led_debounce = 0;
+#ifdef PROBE_UART_TX_LED
     gpio_init(PROBE_UART_TX_LED);
     gpio_set_dir(PROBE_UART_TX_LED, GPIO_OUT);
 #endif
-#ifdef PROBE_UART_RX_LED
     rx_led_debounce = 0;
+#ifdef PROBE_UART_RX_LED
     gpio_init(PROBE_UART_RX_LED);
     gpio_set_dir(PROBE_UART_RX_LED, GPIO_OUT);
 #endif
@@ -112,8 +111,10 @@ bool cdc_task(void)
         if (rx_len) {
 #ifdef PROBE_UART_RX_LED
           gpio_put(PROBE_UART_RX_LED, 1);
-          rx_led_debounce = debounce_ticks;
 #endif
+          rx_led_debounce = debounce_ticks;
+          rxLedValue = true;
+
           written = MIN(tud_cdc_write_available(), rx_len);
           if (rx_len > written)
               cdc_tx_oe++;
@@ -123,12 +124,16 @@ bool cdc_task(void)
             tud_cdc_write_flush();
           }
         } else {
-#ifdef PROBE_UART_RX_LED
-          if (rx_led_debounce)
+
+          if (rx_led_debounce) {
             rx_led_debounce--;
-          else
+          } else {
+#ifdef PROBE_UART_RX_LED
             gpio_put(PROBE_UART_RX_LED, 0);
 #endif
+            rxLedValue = false;
+          }
+
         }
 
       /* Reading from a firehose and writing to a FIFO. */
@@ -137,28 +142,33 @@ bool cdc_task(void)
         size_t tx_len;
 #ifdef PROBE_UART_TX_LED
         gpio_put(PROBE_UART_TX_LED, 1);
-        tx_led_debounce = debounce_ticks;
 #endif
+        tx_led_debounce = debounce_ticks;
+        txLedValue = true;
+
         /* Batch up to half a FIFO of data - don't clog up on RX */
         watermark = MIN(watermark, 16);
         tx_len = tud_cdc_read(tx_buf, watermark);
         uart_write_blocking(PROBE_UART_INTERFACE, tx_buf, tx_len);
       } else {
-#ifdef PROBE_UART_TX_LED
-          if (tx_led_debounce)
+
+          if (tx_led_debounce) {
             tx_led_debounce--;
-          else
+          } else {
+            txLedValue = false;
+#ifdef PROBE_UART_TX_LED
             gpio_put(PROBE_UART_TX_LED, 0);
 #endif
+          }
+
       }
       /* Pending break handling */
       if (timed_break) {
         if (((int)break_expiry - (int)xTaskGetTickCount()) < 0) {
           timed_break = false;
           uart_set_break(PROBE_UART_INTERFACE, false);
-#ifdef PROBE_UART_TX_LED
+
           tx_led_debounce = 0;
-#endif
         } else {
           keep_alive = true;
         }
@@ -168,9 +178,7 @@ bool cdc_task(void)
       uart_set_break(PROBE_UART_INTERFACE, false);
       timed_break = false;
       was_connected = 0;
-#ifdef PROBE_UART_TX_LED
       tx_led_debounce = 0;
-#endif
       cdc_tx_oe = 0;
     }
     return keep_alive;
