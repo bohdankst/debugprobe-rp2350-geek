@@ -45,7 +45,9 @@
 #define PROBE_UART_INTERFACE uart1
 #define PROBE_UART_BAUDRATE 115200
 
+#if (!LCD_DISPLAY)
 #define PROBE_USB_CONNECTED_LED 25
+#endif
 
 #define PROBE_PRODUCT_STRING "Debugprobe on Pico (CMSIS-DAP)"
 

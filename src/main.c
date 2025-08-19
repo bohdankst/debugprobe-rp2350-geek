@@ -46,6 +46,10 @@
 #include "DAP.h"
 #include "hardware/structs/usb.h"
 
+#if (LCD_DISPLAY > 0)
+#include "gui.h"
+#endif
+
 // UART0 for debugprobe debug
 // UART1 for debugprobe to target device
 
@@ -130,6 +134,10 @@ int main(void) {
     cdc_uart_init();
     tusb_init();
     stdio_uart_init();
+
+  #if (LCD_DISPLAY > 0)
+    gui_init(2500); // 2.5 seconds for the start screen
+  #endif
 
     DAP_Setup();
 

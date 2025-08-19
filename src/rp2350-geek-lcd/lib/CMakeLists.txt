@@ -1,0 +1,5 @@
+add_subdirectory(Config)
+# add_subdirectory(Infrared)
+add_subdirectory(LCD)
+add_subdirectory(Fonts)
+add_subdirectory(GUI)

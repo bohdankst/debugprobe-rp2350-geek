@@ -97,6 +97,12 @@ target_link_libraries(debugprobe PRIVATE
         FreeRTOS-Kernel-Heap1
 )
 
+if (LCD_DISPLAY)
+    add_subdirectory(src/rp2350-geek-lcd)
+    target_link_libraries(debugprobe PRIVATE gui)
+endif (LCD_DISPLAY)
+
+
 pico_set_binary_type(debugprobe copy_to_ram)
 
 pico_add_extra_outputs(debugprobe)
