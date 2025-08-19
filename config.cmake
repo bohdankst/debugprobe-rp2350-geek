@@ -1,0 +1,1 @@
+set(DEBUG_ON_PICO ON CACHE BOOL "Compile firmware for the Pico instead of Debug Probe" FORCE)
